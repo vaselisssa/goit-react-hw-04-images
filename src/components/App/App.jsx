@@ -1,4 +1,4 @@
-import React, { Component } from 'react';
+import { useState, useEffect } from 'react';
 import { ToastContainer, toast } from 'react-toastify';
 import { animateScroll as scroll } from 'react-scroll';
 import 'react-toastify/dist/ReactToastify.css';
@@ -8,71 +8,63 @@ import Loader from 'components/Loader';
 import fetchImages from 'services/api';
 import ImageGallery from 'components/ImageGallery';
 import Button from 'components/Button';
-export default class App extends Component {
-  state = {
-    query: '',
-    images: [],
-    page: 1,
-    status: 'idle',
-    error: null,
-  };
 
-  totalHits = null;
+const App = () => {
+  const [query, setQuery] = useState('');
+  const [images, setImages] = useState([]);
+  const [page, setPage] = useState(1);
+  const [status, setStatus] = useState('idle');
+  const [error, setError] = useState(null);
+  const [total, setTotal] = useState(null);
 
-  componentDidUpdate(_, prevState) {
-    const { query, page } = this.state;
-
-    if (prevState.query !== query || prevState.page !== page) {
-      this.fetchImagesByQuery(query, page);
-    }
-  }
-
-  handleFormSubmit = query => {
-    this.resetState();
-    this.setState({ query });
-  };
-
-  fetchImagesByQuery = async (query, page) => {
-    this.setState({ status: 'pending' });
-    if (!query) {
-      return;
-    }
-    try {
-      const { hits, totalHits } = await fetchImages(query, page);
-      this.totalHits = totalHits;
-      if (!hits.length) {
-        toast.info(
-          'No results were found for your search, please try something else.'
-        );
+  useEffect(() => {
+    const fetchImagesByQuery = async () => {
+      if (!query) {
+        return;
       }
-      this.setState(({ images }) => ({
-        images: [...images, ...hits],
-        status: 'resolved',
-      }));
-    } catch (error) {
-      this.setState({ error: error.message, status: 'rejected' });
-      toast.error('Sorry something went wrong.');
-    }
+      try {
+        setStatus('pending');
+        const { hits, totalHits } = await fetchImages(query, page);
+        if (!hits.length) {
+          toast.info(
+            'No results were found for your search, please try something else.'
+          );
+        }
+        setImages(prevState => [...prevState, ...hits]);
+        setTotal(totalHits);
+        setStatus('resolved');
+        setError('');
+      } catch (error) {
+        setError(error.message);
+        setStatus('rejected');
+
+        toast.error('Sorry something went wrong.');
+      }
+    };
+
+    fetchImagesByQuery();
+  }, [query, page]);
+
+  const handleFormSubmit = query => {
+    resetState();
+    setQuery(query);
   };
 
-  resetState = () => {
-    this.setState({
-      query: '',
-      images: [],
-      page: 1,
-      status: 'idle',
-      error: null,
-    });
+  const resetState = () => {
+    setQuery('');
+    setImages([]);
+    setPage(1);
+    setStatus('idle');
+    setError(null);
+    setTotal(null);
   };
 
-  loadMore = () => {
-    this.setState(prevState => ({
-      page: prevState.page + 1,
-    }));
-    this.scrollToBottom();
+  const loadMore = () => {
+    setPage(prevState => prevState + 1);
+    scrollToBottom();
   };
 
-  scrollToBottom = () => {
+  const scrollToBottom = () => {
     scroll.scrollToBottom({
       duration: 2000,
       delay: 10,
@@ -80,30 +72,28 @@ export default class App extends Component {
     });
   };
 
-  render() {
-    const { images, status, error } = this.state;
+  return (
+    <StyledApp>
+      <SearchBar onSubmit={handleFormSubmit} />
+      <ToastContainer
+        position="top-center"
+        autoClose={2000}
+        hideProgressBar
+        theme="colored"
+      />
+      {status === 'idle' && null}
+      {status === 'pending' && <Loader />}
+      {status === 'rejected' && (
+        <h1 style={{ color: '#b90505', textAlign: 'center' }}>
+          {error}. Please refresh the page and try again.
+        </h1>
+      )}
+      {status === 'resolved' && <ImageGallery images={images} />}
+      {images.length > 0 &&
+        images.length !== total &&
+        status === 'resolved' && <Button onClick={loadMore} />}
+    </StyledApp>
+  );
+};
 
-    return (
-      <StyledApp>
-        <SearchBar onSubmit={this.handleFormSubmit} />
-        <ToastContainer
-          position="top-center"
-          autoClose={2000}
-          hideProgressBar
-          theme="colored"
-        />
-        {status === 'idle' && null}
-        {status === 'pending' && <Loader />}
-        {status === 'rejected' && (
-          <h1 style={{ color: '#b90505', textAlign: 'center' }}>
-            {error}. Please refresh the page and try again.
-          </h1>
-        )}
-        {status === 'resolved' && <ImageGallery images={images} />}
-        {images.length > 0 &&
-          images.length !== this.totalHits &&
-          status === 'resolved' && <Button onClick={this.loadMore} />}
-      </StyledApp>
-    );
-  }
-}
+export default App;
